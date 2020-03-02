@@ -9,6 +9,42 @@ import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.CoroutineContext
 
+/**
+ * ```
+ * Utility class to run back-ground tasks sequentially in allocated thread pool.
+ *
+ * User have to initialize Async Task Manager singleton instance with a
+ * lifecycle-owner(AppCompatActivity/Fragment) instance.
+ *
+ * Async Task Manager instance will not save lifecycle-owner reference but
+ * will observe it's lifecycle and will clear itself(including task Queue)
+ * on "lifecycle-owner" destroy. So, user doesn't have worry about resource clearing.
+ * ```
+ *
+ * ##Usage
+ * ###### Initialization(Mandatory):
+ * ```
+ * AsyncTaskManager.init(activity: AppCompatActivity,maxParallelTasks:Int)
+ *
+ * //or
+ *
+ * AsyncTaskManager.init(fragment: Fragment,maxParallelTasks:Int)
+ * ```
+ * ###### Add back-ground task on pending task queue:
+ * ```
+ *  AsyncTaskManager.addTask(task: AsyncTask<T>)
+ *
+ *  //or
+ *
+ *  AsyncTaskManager.addTask(task:()->T?) //Without caller lifecycle-owner hook
+ * ```
+ * ###### Remove task(Mandatory):
+ * ```
+ * AsyncTaskManager.removeTask(task: AsyncTask<T>)
+ * ```
+ *
+ * @author Bikash das(das.bikash.dev@gmail.com)
+ * */
 class AsyncTaskManager private constructor(private val maxParallelTasks:Int, lifecycleOwner: LifecycleOwner)
     :DefaultLifecycleObserver,CoroutineScope{
 
@@ -71,7 +107,7 @@ class AsyncTaskManager private constructor(private val maxParallelTasks:Int, lif
     }
 
     companion object{
-        private const val NOT_INITIALIZED_MESSAGE = "AsyncManager is not initialized."
+        private const val NOT_INITIALIZED_MESSAGE = "Async Task Manager is not initialized."
         private val DEFAULT_MAX_PARALLEL_RUNNING_TASKS = 2
         private var instance:AsyncTaskManager?=null
 
@@ -79,6 +115,13 @@ class AsyncTaskManager private constructor(private val maxParallelTasks:Int, lif
             instance = null
         }
 
+        /**
+         * Method to initialize(Mandatory) using Fragment instance
+         *
+         * @param fragment Fragment instance
+         * @param maxParallelTasks Maximum parallel running task count. Default DEFAULT_MAX_PARALLEL_RUNNING_TASKS
+         * @return true for success else false
+         * */
         @JvmStatic
         fun init(fragment: Fragment,maxParallelTasks: Int= DEFAULT_MAX_PARALLEL_RUNNING_TASKS):Boolean{
             fragment.activity?.let {
@@ -88,6 +131,14 @@ class AsyncTaskManager private constructor(private val maxParallelTasks:Int, lif
             }
             return false
         }
+
+        /**
+         * Method to initialize(Mandatory) using AppCompatActivity instance
+         *
+         * @param activity AppCompatActivity instance
+         * @param maxParallelTasks Maximum parallel running task count. Default DEFAULT_MAX_PARALLEL_RUNNING_TASKS
+         * @return true for success else false
+         * */
         @JvmStatic
         fun init(activity: AppCompatActivity,maxParallelTasks: Int= DEFAULT_MAX_PARALLEL_RUNNING_TASKS):Boolean{
             if (instance == null){
@@ -100,6 +151,12 @@ class AsyncTaskManager private constructor(private val maxParallelTasks:Int, lif
             return instance!=null
         }
 
+        /**
+         * Method to add AsyncTask on pending task queue
+         *
+         * @param task AsyncTask instance
+         * @throws IllegalStateException if 'AsyncTaskManager' not initialized
+         * */
         @JvmStatic
         fun <T:Any> addTask(task: AsyncTask<T>){
             if (instance == null){
@@ -108,6 +165,13 @@ class AsyncTaskManager private constructor(private val maxParallelTasks:Int, lif
             instance!!.queueTask(task)
         }
 
+        /**
+         * Method to remove AsyncTask from pending task queue
+         *
+         * @param task AsyncTask instance
+         * @throws IllegalStateException if 'AsyncTaskManager' not initialized
+         * @return true if task removed else false
+         * */
         @JvmStatic
         fun <T:Any> removeTask(task: AsyncTask<T>):Boolean{
             if (instance == null){
@@ -116,53 +180,18 @@ class AsyncTaskManager private constructor(private val maxParallelTasks:Int, lif
             return instance!!.clearTask(task)
         }
 
+        /**
+         * Method to directly(without lifecycleOwner and doOnSuccess/doOnFailure) add Task on pending task queue
+         *
+         * @param task Functional parameter
+         * @throws IllegalStateException if 'AsyncTaskManager' not initialized
+         * */
         @JvmStatic
         fun <T:Any> addTask(task:()->T?){
             if (instance == null){
                 throw IllegalStateException(NOT_INITIALIZED_MESSAGE)
             }
             instance!!.queueTask(AsyncTask(task=task,lifecycleOwner = null))
-        }
-    }
-}
-
-class AsyncTask<T:Any>(
-    lifecycleOwner: LifecycleOwner?,
-    private val task:()->T?,
-    private val doOnSuccess:((T?)->Any?)? = null,
-    private val doOnFailure:((Throwable?)->Any?)?=null
-):DefaultLifecycleObserver{
-
-    init {
-        lifecycleOwner?.lifecycle?.addObserver(this)
-    }
-
-    private var isActive=true
-
-    override fun onDestroy(owner: LifecycleOwner) {
-        isActive = false
-    }
-
-    internal fun runTask():T?{
-        if (isActive){
-            return task()
-        }
-        return null
-    }
-
-    internal fun onSuccess(result:T?){
-        if (isActive){
-            runOnMainThread {
-                doOnSuccess?.invoke(result)
-            }
-        }
-    }
-
-    internal fun onFailure(throwable:Throwable?){
-        if (isActive){
-            runOnMainThread {
-                doOnFailure?.invoke(throwable)
-            }
         }
     }
 }
