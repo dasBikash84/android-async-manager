@@ -7,20 +7,23 @@ import androidx.lifecycle.LifecycleOwner
 import kotlinx.coroutines.*
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.CoroutineContext
 
 class AsyncTaskManager private constructor(private val maxParallelTasks:Int, lifecycleOwner: LifecycleOwner)
-    :DefaultLifecycleObserver{
+    :DefaultLifecycleObserver,CoroutineScope{
 
     private val taskQueue:Queue<AsyncTask<*>> = LinkedList()
     private val parallelTaskCount = AtomicInteger(0)
-    private val jobs = mutableListOf<Job>()
+
+    override val coroutineContext: CoroutineContext
+        get() = Job()
 
     init {
         lifecycleOwner.lifecycle.addObserver(this)
     }
 
     private fun launchTaskIfAny(){
-        if (parallelTaskCount.get()< maxParallelTasks){
+        if (parallelTaskCount.get()< maxParallelTasks && isActive){
             taskQueue.poll()?.let {
                 parallelTaskCount.getAndIncrement()
                 launchTask(it)
@@ -29,25 +32,26 @@ class AsyncTaskManager private constructor(private val maxParallelTasks:Int, lif
     }
 
     private fun <T:Any> launchTask(task: AsyncTask<T>){
-        var job:Job?=null
-        job = GlobalScope.launch(Dispatchers.IO) {
+        launch(Dispatchers.IO) {
             try {
                 task.runTask().let {
-                    task.onSuccess(it)
+                    if (isActive) {
+                        task.onSuccess(it)
+                    }
                 }
             }catch (ex:Throwable){
-                task.onFailure(ex)
+                if (isActive) {
+                    task.onFailure(ex)
+                }
             }
             parallelTaskCount.getAndDecrement()
-            jobs.remove(job)
             launchTaskIfAny()
         }
-        jobs.add(job)
     }
 
     private fun <T:Any> queueTask(task: AsyncTask<T>){
-        GlobalScope.launch(Dispatchers.IO) {
-            while (!taskQueue.offer(task)){
+        launch(Dispatchers.IO) {
+            while (!taskQueue.offer(task) && isActive){
                 delay(50L)
             }
             launchTaskIfAny()
@@ -61,8 +65,7 @@ class AsyncTaskManager private constructor(private val maxParallelTasks:Int, lif
     }
 
     private fun clearResources() {
-        jobs.asSequence().forEach { it.cancel() }
-        jobs.clear()
+        cancel()
         taskQueue.clear()
         clearInstance()
     }
@@ -112,19 +115,25 @@ class AsyncTaskManager private constructor(private val maxParallelTasks:Int, lif
             }
             return instance!!.clearTask(task)
         }
+
+        @JvmStatic
+        fun <T:Any> addTask(task:()->T?){
+            if (instance == null){
+                throw IllegalStateException(NOT_INITIALIZED_MESSAGE)
+            }
+            instance!!.queueTask(AsyncTask(task=task,lifecycleOwner = null))
+        }
     }
 }
 
 class AsyncTask<T:Any>(
+    lifecycleOwner: LifecycleOwner?,
     private val task:()->T?,
     private val doOnSuccess:((T?)->Any?)? = null,
     private val doOnFailure:((Throwable?)->Any?)?=null
 ):DefaultLifecycleObserver{
-    constructor(
-                task:()->T?,
-                lifecycleOwner: LifecycleOwner?=null,
-                doOnSuccess:((T?)->Any?)? = null,
-                doOnFailure:((Throwable?)->Any?)?=null):this(task, doOnSuccess, doOnFailure){
+
+    init {
         lifecycleOwner?.lifecycle?.addObserver(this)
     }
 
