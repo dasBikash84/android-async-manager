@@ -10,7 +10,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
 /**
- * Extension function on launch async task
+ * Extension function to launch async task
  * suspending any suspension function
  *
  * @param task posted functional parameter
