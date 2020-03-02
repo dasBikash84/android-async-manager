@@ -24,7 +24,7 @@ dependencies {
 ```
 
 ## Features/Notes
-- Launching and running back-ground made very easy and safe(with observer on launcher lifecycle-owner state).
+- [`Launching and running`](https://github.com/dasBikash84/android-async-manager/blob/master/async_manager/src/main/java/com/dasbikash/async_manager/AsyncTaskManager.kt) back-ground made very easy and safe(with observer on launcher lifecycle-owner state).
 - Automatic resource clearing.
 - Optional callback method for task success/failure (Will run on main thread).
 
