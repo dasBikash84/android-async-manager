@@ -1,0 +1,2 @@
+rootProject.name='Async Manager'
+include ':async_manager'
