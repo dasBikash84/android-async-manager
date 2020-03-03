@@ -68,9 +68,15 @@ class AsyncTaskManager private constructor(private val maxParallelTasks:Int, lif
     }
 
     private fun <T:Any> launchTask(task: AsyncTask<T>){
-        launch(Dispatchers.IO) {
+        launch {
             try {
-                task.runTask().let {
+                withTimeout(task.maxRunTime){
+                    try {
+                        runSuspended {task.runTask()}
+                    }catch (ex:TimeoutCancellationException){
+                        throw TimeOutException("Task didn't finish within ${task.maxRunTime} ms.")
+                    }
+                }.let {
                     if (isActive) {
                         task.onSuccess(it)
                     }

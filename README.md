@@ -25,6 +25,7 @@ dependencies {
 
 ## Features/Notes
 - [`Launching and running`](https://github.com/dasBikash84/android-async-manager/blob/master/async_manager/src/main/java/com/dasbikash/async_manager/AsyncTaskManager.kt) back-ground made very easy and safe(with observer on launcher lifecycle-owner state).
+- Configurable [`timeout`](https://github.com/dasBikash84/android-async-manager/blob/master/async_manager/src/main/java/com/dasbikash/async_manager/AsyncTask.kt) for back-ground tasks.
 - Automatic resource clearing.
 - Optional callback method for task success/failure `(Will run on main thread)`.
 - Very useful [`extension`](https://github.com/dasBikash84/android-async-manager/blob/master/async_manager/src/main/java/com/dasbikash/async_manager/Extensions.kt) function provided for **running any code block with suspension**, inside a suspend function.

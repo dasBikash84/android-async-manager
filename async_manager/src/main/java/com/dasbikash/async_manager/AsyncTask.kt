@@ -16,12 +16,14 @@ import androidx.lifecycle.LifecycleOwner
  * @param task Functial param for back-ground task.
  * @param doOnSuccess optional callback to be called on task success.
  * @param doOnFailure optional callback to be called on task failure.
+ * @param maxRunTime Maximum allowed time for task to run in milliseconds
  * */
 class AsyncTask<T:Any>(
     lifecycleOwner: LifecycleOwner?,
     private val task:()->T?,
     private val doOnSuccess:((T?)->Any?)? = null,
-    private val doOnFailure:((Throwable?)->Any?)?=null
+    private val doOnFailure:((Throwable?)->Any?)?=null,
+    internal val maxRunTime:Long = DEFAULT_MAX_TASK_RUN_TIME
 ): DefaultLifecycleObserver {
 
     init {
@@ -55,5 +57,10 @@ class AsyncTask<T:Any>(
                 doOnFailure?.invoke(throwable)
             }
         }
+    }
+    companion object{
+        const val SEC_IN_MS = 1000L
+        const val MIN_IN_MS = 60 * SEC_IN_MS
+        private const val DEFAULT_MAX_TASK_RUN_TIME = 30 * SEC_IN_MS
     }
 }

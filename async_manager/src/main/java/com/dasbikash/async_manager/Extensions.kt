@@ -15,7 +15,7 @@ import kotlin.coroutines.suspendCoroutine
  *
  * @param task posted functional parameter
  * */
-suspend fun <T:Any> runSuspended(task:()->T):T {
+suspend fun <T:Any> runSuspended(task:()->T?):T? {
     coroutineContext().let {
         return withContext(it) {
             return@withContext async(Dispatchers.IO) { task() }.await()
