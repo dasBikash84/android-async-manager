@@ -18,11 +18,11 @@ import androidx.lifecycle.LifecycleOwner
  * @param doOnFailure optional callback to be called on task failure.
  * @param maxRunTime Maximum allowed time for task to run in milliseconds
  * */
-class AsyncTask<T:Any>(
+class AsyncTask<T,K>(
     lifecycleOwner: LifecycleOwner?,
-    private val task:()->T?,
-    private val doOnSuccess:((T?)->Any?)? = null,
-    private val doOnFailure:((Throwable?)->Any?)?=null,
+    private val task:()->T,
+    private val doOnSuccess:((T?)->K)? = null,
+    private val doOnFailure:((Throwable?)->Unit)?=null,
     internal val maxRunTime:Long = DEFAULT_MAX_TASK_RUN_TIME
 ): DefaultLifecycleObserver {
 
@@ -36,11 +36,11 @@ class AsyncTask<T:Any>(
         isActive = false
     }
 
-    internal fun runTask():T?{
+    internal fun runTask():T{
         if (isActive){
             return task()
         }
-        return null
+        throw IllegalStateException()
     }
 
     internal fun onSuccess(result:T?){
