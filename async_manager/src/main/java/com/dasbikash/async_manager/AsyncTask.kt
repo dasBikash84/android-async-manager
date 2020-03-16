@@ -17,11 +17,11 @@ import androidx.lifecycle.LifecycleOwner
  * @param doOnSuccess optional callback to be called on task success.
  * @param doOnFailure optional callback to be called on task failure.
  * */
-class AsyncTask<T:Any>(
+class AsyncTask<T>(
     lifecycleOwner: LifecycleOwner?,
-    private val task:()->T?,
-    private val doOnSuccess:((T?)->Any?)? = null,
-    private val doOnFailure:((Throwable?)->Any?)?=null
+    private val task:()->T,
+    private val doOnSuccess:((T)->Any?)? = null,
+    private val doOnFailure:((Throwable?)->Unit)?=null
 ): DefaultLifecycleObserver {
 
     init {
@@ -34,14 +34,14 @@ class AsyncTask<T:Any>(
         isActive = false
     }
 
-    internal fun runTask():T?{
+    internal fun runTask():T{
         if (isActive){
             return task()
         }
-        return null
+        throw IllegalStateException()
     }
 
-    internal fun onSuccess(result:T?){
+    internal fun onSuccess(result:T){
         if (isActive){
             runOnMainThread {
                 doOnSuccess?.invoke(result)
