@@ -39,7 +39,7 @@ class AsyncTaskManager private constructor(private val maxParallelTasks:Int)
     override val coroutineContext: CoroutineContext
         get() = Job()
 
-    private fun launchTaskIfAny(){
+    private suspend fun launchTaskIfAny(){
         if (parallelTaskCount.get()< maxParallelTasks && isActive){
             taskQueue.poll()?.let {
                 parallelTaskCount.getAndIncrement()
