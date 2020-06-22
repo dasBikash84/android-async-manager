@@ -2,15 +2,11 @@ package com.dasbikash.async_manager
 
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import kotlinx.coroutines.*
-import kotlinx.coroutines.NonCancellable.cancel
-import kotlinx.coroutines.NonCancellable.isActive
 import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.coroutines.CoroutineContext
 
 /**
  * ```
@@ -166,12 +162,16 @@ class AsyncTaskManager private constructor(maxRunningTasks:Int){
          * @return Enqueued AsyncTask
          * */
         @JvmStatic
-        fun <T> addTask(task: AsyncTask<T>):AsyncTask<T>{
+        fun <T> addTask(task:()->T?,
+                        doOnSuccess:((T?)->Unit)? = null,
+                        doOnFailure:((Throwable?)->Unit)?=null,
+                        lifecycleOwner: LifecycleOwner?=null):AsyncTaskHandler<T>{
             if (instance == null){
                 init()
             }
-            return task.apply {
-                instance!!.queueTask(this)
+            return AsyncTask(task,doOnSuccess, doOnFailure, lifecycleOwner).let {
+                instance!!.queueTask(it)
+                AsyncTaskHandler(it)
             }
         }
 
@@ -184,48 +184,12 @@ class AsyncTaskManager private constructor(maxRunningTasks:Int){
          * @return true if task removed else false
          * */
         @JvmStatic
-        fun <T> removeTask(task: AsyncTask<T>):Boolean{
+        internal fun <T> removeTask(task: AsyncTask<T>):Boolean{
             if (instance == null){
                 throw IllegalStateException(NOT_INITIALIZED_MESSAGE)
             }
             return instance!!.clearTask(task)
         }
-
-        /**
-         *
-         * Method to directly(without lifecycleOwner and doOnSuccess/doOnFailure) add Task on pending task queue
-         *
-         * @param task Functional parameter
-         * @return Enqueued AsyncTask
-         * */
-        @JvmStatic
-        fun <T> addTask(task:()->T?):AsyncTask<T>{
-            if (instance == null){
-                init()
-            }
-            return AsyncTask(task=task).apply {
-                instance!!.queueTask(this)
-            }
-        }
     }
 }
 
-/**
- * Extension function on AppCompatActivity to enqueue task.
- * Subject AppCompatActivity is injected as lifecycle hook.
- *
- * @param task Functional parameter
- * @return Enqueued AsyncTask
- * */
-fun <T> AppCompatActivity.addAsyncTask(task:()->T?):AsyncTask<T> =
-    AsyncTaskManager.addTask(AsyncTask(task=task,lifecycleOwner = this))
-
-/**
- * Extension function on Fragment to enqueue task.
- * Subject Fragment is injected as lifecycle hook.
- *
- * @param task Functional parameter
- * @return Enqueued AsyncTask
- * */
-fun <T> Fragment.addAsyncTask(task:()->T?):AsyncTask<T> =
-    AsyncTaskManager.addTask(AsyncTask(task=task,lifecycleOwner = this))

@@ -39,7 +39,7 @@ dependencies {
     
     AsyncTaskManager.init(maxParallelTasks:Int)
 ```
-#### Cancellation of entire task queue
+##### Cancellation of entire task queue:
 ```
     AsyncTaskManager.clear()
 ```

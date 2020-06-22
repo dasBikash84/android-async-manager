@@ -2,8 +2,6 @@ package com.dasbikash.async_manager
 
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
-import kotlinx.coroutines.*
-import kotlin.coroutines.CoroutineContext
 
 /**
  * ```
@@ -20,7 +18,7 @@ import kotlin.coroutines.CoroutineContext
  * @param lifecycleOwner optional(but recommended) Lifecycle hook for task cancellation.
  * */
 
-class AsyncTask<T>(
+internal class AsyncTask<T>(
     private val task:()->T?,
     private val doOnSuccess:((T?)->Unit)? = null,
     private val doOnFailure:((Throwable?)->Unit)?=null,
