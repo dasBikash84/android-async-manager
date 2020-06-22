@@ -2,6 +2,7 @@ package com.dasbikash.async_manager
 
 import android.os.Handler
 import android.os.Looper
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
@@ -14,11 +15,12 @@ import kotlin.coroutines.suspendCoroutine
  * suspending any suspension function
  *
  * @param task posted functional parameter
+ * @param dispatcher CoroutineDispatcher for running Async task
  * */
-suspend fun <T> runSuspended(task:()->T):T {
+suspend fun <T> runSuspended(dispatcher: CoroutineDispatcher=Dispatchers.IO,task:()->T?):T? {
     coroutineContext().let {
         return withContext(it) {
-            return@withContext async(Dispatchers.IO) { task() }.await()
+            return@withContext async(dispatcher) { task() }.await()
         }
     }
 }

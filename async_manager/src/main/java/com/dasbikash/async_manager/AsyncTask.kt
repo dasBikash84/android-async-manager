@@ -2,6 +2,8 @@ package com.dasbikash.async_manager
 
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import kotlinx.coroutines.*
+import kotlin.coroutines.CoroutineContext
 
 /**
  * ```
@@ -12,39 +14,38 @@ import androidx.lifecycle.LifecycleOwner
  * Registered doOnSuccess/doOnFailure will run on main thread.
  * ```
  *
- * @param lifecycleOwner optional(but recommended) caller LifecycleOwner.
- * @param task Functial param for back-ground task.
+ * @param task Functional param for back-ground task.
  * @param doOnSuccess optional callback to be called on task success.
  * @param doOnFailure optional callback to be called on task failure.
- * @param maxRunTime Maximum allowed time for task to run in milliseconds
+ * @param lifecycleOwner optional(but recommended) Lifecycle hook for task cancellation.
  * */
-class AsyncTask<T,K>(
-    lifecycleOwner: LifecycleOwner?,
-    private val task:()->T,
-    private val doOnSuccess:((T?)->K)? = null,
+
+class AsyncTask<T>(
+    private val task:()->T?,
+    private val doOnSuccess:((T?)->Unit)? = null,
     private val doOnFailure:((Throwable?)->Unit)?=null,
-    internal val maxRunTime:Long = DEFAULT_MAX_TASK_RUN_TIME
+    lifecycleOwner: LifecycleOwner?=null
 ): DefaultLifecycleObserver {
+
+    private var cancelled = OnceSettableBoolean()
 
     init {
         lifecycleOwner?.lifecycle?.addObserver(this)
     }
 
-    private var isActive=true
-
     override fun onDestroy(owner: LifecycleOwner) {
-        isActive = false
+        cancelled.set()
     }
 
-    internal fun runTask():T{
-        if (isActive){
+    internal fun runTask():T?{
+        if (!cancelled.get()){
             return task()
         }
         throw IllegalStateException()
     }
 
     internal fun onSuccess(result:T?){
-        if (isActive){
+        if (!cancelled.get()){
             runOnMainThread {
                 doOnSuccess?.invoke(result)
             }
@@ -52,15 +53,18 @@ class AsyncTask<T,K>(
     }
 
     internal fun onFailure(throwable:Throwable?){
-        if (isActive){
+        if (!cancelled.get()){
             runOnMainThread {
                 doOnFailure?.invoke(throwable)
             }
         }
     }
-    companion object{
-        const val SEC_IN_MS = 1000L
-        const val MIN_IN_MS = 60 * SEC_IN_MS
-        private const val DEFAULT_MAX_TASK_RUN_TIME = 30 * SEC_IN_MS
+
+    /**
+     * Cancels current task.
+     *
+     * */
+    fun cancel(){
+        cancelled.set()
     }
 }

@@ -1,7 +1,14 @@
 package com.dasbikash.async_manager
 
+import androidx.appcompat.app.AppCompatActivity
+import androidx.fragment.app.Fragment
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import kotlinx.coroutines.*
+import kotlinx.coroutines.NonCancellable.cancel
+import kotlinx.coroutines.NonCancellable.isActive
 import java.util.*
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.CoroutineContext
 
@@ -11,36 +18,64 @@ import kotlin.coroutines.CoroutineContext
  *
  * ```
  * ##Usage
- * ###### Initialization(Mandatory):
+ *
+ * ###### Initializer (optional)
  * ```
  * AsyncTaskManager.init(maxParallelTasks:Int)
  * ```
+ *
  * ###### Add back-ground task on pending task queue:
  * ```
  *  AsyncTaskManager.addTask(task: AsyncTask<T>)
  *
  *  //or
  *
- *  AsyncTaskManager.addTask(task:()->T?) //Without caller lifecycle-owner hook
+ *  AsyncTaskManager.addTask(task:()->T?) //Without completion callbacks
  * ```
- * ###### Remove task(Mandatory):
+ *
+ * ###### Remove task:
  * ```
  * AsyncTaskManager.removeTask(task: AsyncTask<T>)
  * ```
  *
+ *#### Cancellation of entire task queue
+ *```
+ * AsyncTaskManager.clear()
+ * ```
+ *
  * @author Bikash das(das.bikash.dev@gmail.com)
  * */
-class AsyncTaskManager private constructor(private val maxParallelTasks:Int)
-    :CoroutineScope{
+class AsyncTaskManager private constructor(maxRunningTasks:Int){
 
-    private val taskQueue:Queue<AsyncTask<*,*>> = LinkedList()
+    private val taskQueue:Queue<AsyncTask<*>> = LinkedList()
     private val parallelTaskCount = AtomicInteger(0)
+    private val maxParallelTasks:Int
 
-    override val coroutineContext: CoroutineContext
-        get() = Job()
+    private val dispatcher: ExecutorCoroutineDispatcher
+    private var cancelled = OnceSettableBoolean()
 
-    private suspend fun launchTaskIfAny(){
-        if (parallelTaskCount.get()< maxParallelTasks && isActive){
+    init {
+        getNumberOfCores().apply {
+            maxParallelTasks =
+                if (maxRunningTasks > this) {
+                    this
+                }else{
+                    maxRunningTasks
+                }.let {
+                    if (it == 0){
+                        1
+                    }else{
+                        it
+                    }
+                }
+        }
+        dispatcher = Executors.newFixedThreadPool(maxParallelTasks).asCoroutineDispatcher()
+    }
+
+    private fun getNumberOfCores():Int = Runtime.getRuntime().availableProcessors()
+
+    private fun launchTaskIfAny(){
+        if (parallelTaskCount.get()< maxParallelTasks && !cancelled.get()){
             taskQueue.poll()?.let {
                 parallelTaskCount.getAndIncrement()
                 launchTask(it)
@@ -48,22 +83,18 @@ class AsyncTaskManager private constructor(private val maxParallelTasks:Int)
         }
     }
 
-    private fun <T,K> launchTask(task: AsyncTask<T,K>){
-        launch {
+    private fun <T> launchTask(task: AsyncTask<T>){
+        GlobalScope.launch {
             try {
-                withTimeout(task.maxRunTime){
-                    try {
-                        runSuspended {task.runTask()}
-                    }catch (ex:TimeoutCancellationException){
-                        throw TimeOutException("Task didn't finish within ${task.maxRunTime} ms.")
-                    }
+                runSuspended(dispatcher) {
+                    task.runTask()
                 }.let {
-                    if (isActive) {
+                    runIfActive {
                         task.onSuccess(it)
                     }
                 }
             }catch (ex:Throwable){
-                if (isActive) {
+                runIfActive {
                     task.onFailure(ex)
                 }
             }
@@ -72,19 +103,28 @@ class AsyncTaskManager private constructor(private val maxParallelTasks:Int)
         }
     }
 
-    private fun <T,K> queueTask(task: AsyncTask<T,K>){
-        launch(Dispatchers.IO) {
-            while (!taskQueue.offer(task) && isActive){
+    private fun runIfActive(work:()->Unit){
+        if (!cancelled.get()){
+            work()
+        }
+    }
+
+    private fun <T> queueTask(task: AsyncTask<T>){
+        GlobalScope.launch {
+            while (!taskQueue.offer(task)){
                 delay(50L)
             }
             launchTaskIfAny()
         }
     }
 
-    private fun <T,K> clearTask(task: AsyncTask<T,K>): Boolean = taskQueue.remove(task)
+    private fun <T> clearTask(task: AsyncTask<T>): Boolean = taskQueue.remove(task)
 
     private fun clearResources() {
-        cancel()
+        cancelled.set()
+        taskQueue.asSequence().forEach {
+            it.cancel()
+        }
         taskQueue.clear()
     }
 
@@ -94,10 +134,12 @@ class AsyncTaskManager private constructor(private val maxParallelTasks:Int)
         private var instance:AsyncTaskManager?=null
 
         /**
-         * Method to initialize(Mandatory) using AppCompatActivity instance.
-         * Will clear init clearing the tasks of previous instance.
+         * Initializer(mandatory) method.
          *
-         * @param maxParallelTasks Maximum parallel running task count. Default DEFAULT_MAX_PARALLEL_RUNNING_TASKS
+         * Initialization will be done clearing the tasks of previous instance.
+         *
+         * @param maxParallelTasks:Int (Maximum parallel running task count. Will get truncated to device core count if maxParallelTasks > core count)
+         *
          * */
         @JvmStatic
         fun init(maxParallelTasks: Int= DEFAULT_MAX_PARALLEL_RUNNING_TASKS){
@@ -106,20 +148,35 @@ class AsyncTaskManager private constructor(private val maxParallelTasks:Int)
         }
 
         /**
-         * Method to add AsyncTask on pending task queue
          *
-         * @param task AsyncTask instance
-         * @throws IllegalStateException if 'AsyncTaskManager' not initialized
+         * Clears current task queue.
+         *
          * */
         @JvmStatic
-        fun <T,K> addTask(task: AsyncTask<T,K>){
-            if (instance == null){
-                throw IllegalStateException(NOT_INITIALIZED_MESSAGE)
-            }
-            instance!!.queueTask(task)
+        fun clear(){
+            instance?.clearResources()
+            instance = null
         }
 
         /**
+         *
+         * Method to add AsyncTask on pending task queue
+         *
+         * @param task AsyncTask instance
+         * @return Enqueued AsyncTask
+         * */
+        @JvmStatic
+        fun <T> addTask(task: AsyncTask<T>):AsyncTask<T>{
+            if (instance == null){
+                init()
+            }
+            return task.apply {
+                instance!!.queueTask(this)
+            }
+        }
+
+        /**
+         *
          * Method to remove AsyncTask from pending task queue
          *
          * @param task AsyncTask instance
@@ -127,7 +184,7 @@ class AsyncTaskManager private constructor(private val maxParallelTasks:Int)
          * @return true if task removed else false
          * */
         @JvmStatic
-        fun <T,K> removeTask(task: AsyncTask<T,K>):Boolean{
+        fun <T> removeTask(task: AsyncTask<T>):Boolean{
             if (instance == null){
                 throw IllegalStateException(NOT_INITIALIZED_MESSAGE)
             }
@@ -135,17 +192,40 @@ class AsyncTaskManager private constructor(private val maxParallelTasks:Int)
         }
 
         /**
+         *
          * Method to directly(without lifecycleOwner and doOnSuccess/doOnFailure) add Task on pending task queue
          *
          * @param task Functional parameter
-         * @throws IllegalStateException if 'AsyncTaskManager' not initialized
+         * @return Enqueued AsyncTask
          * */
         @JvmStatic
-        fun <T,K> addTask(task:()->T){
+        fun <T> addTask(task:()->T?):AsyncTask<T>{
             if (instance == null){
-                throw IllegalStateException(NOT_INITIALIZED_MESSAGE)
+                init()
             }
-            instance!!.queueTask(AsyncTask<T,K>(task=task,lifecycleOwner = null))
+            return AsyncTask(task=task).apply {
+                instance!!.queueTask(this)
+            }
         }
     }
 }
+
+/**
+ * Extension function on AppCompatActivity to enqueue task.
+ * Subject AppCompatActivity is injected as lifecycle hook.
+ *
+ * @param task Functional parameter
+ * @return Enqueued AsyncTask
+ * */
+fun <T> AppCompatActivity.addAsyncTask(task:()->T?):AsyncTask<T> =
+    AsyncTaskManager.addTask(AsyncTask(task=task,lifecycleOwner = this))
+
+/**
+ * Extension function on Fragment to enqueue task.
+ * Subject Fragment is injected as lifecycle hook.
+ *
+ * @param task Functional parameter
+ * @return Enqueued AsyncTask
+ * */
+fun <T> Fragment.addAsyncTask(task:()->T?):AsyncTask<T> =
+    AsyncTaskManager.addTask(AsyncTask(task=task,lifecycleOwner = this))
