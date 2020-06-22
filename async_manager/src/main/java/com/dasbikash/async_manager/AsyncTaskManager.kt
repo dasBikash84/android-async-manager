@@ -159,7 +159,10 @@ class AsyncTaskManager private constructor(maxRunningTasks:Int){
          * Method to add AsyncTask on pending task queue
          *
          * @param task AsyncTask instance
-         * @return Enqueued AsyncTask
+         * @param doOnSuccess optional callback to be called on task success.
+         * @param doOnFailure optional callback to be called on task failure.
+         * @param lifecycleOwner optional(but recommended) Lifecycle hook for task cancellation.
+         * @return AsyncTaskHandler for enqueued AsyncTask
          * */
         @JvmStatic
         fun <T> addTask(task:()->T?,
@@ -173,22 +176,6 @@ class AsyncTaskManager private constructor(maxRunningTasks:Int){
                 instance!!.queueTask(it)
                 AsyncTaskHandler(it)
             }
-        }
-
-        /**
-         *
-         * Method to remove AsyncTask from pending task queue
-         *
-         * @param task AsyncTask instance
-         * @throws IllegalStateException if 'AsyncTaskManager' not initialized
-         * @return true if task removed else false
-         * */
-        @JvmStatic
-        internal fun <T> removeTask(task: AsyncTask<T>):Boolean{
-            if (instance == null){
-                throw IllegalStateException(NOT_INITIALIZED_MESSAGE)
-            }
-            return instance!!.clearTask(task)
         }
     }
 }

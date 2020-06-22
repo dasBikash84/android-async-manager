@@ -31,6 +31,8 @@ dependencies {
 
 ## Usage example
 
+[`Example app`](https://github.com/dasBikash84/android-lib-test/tree/master/async_manager_example)
+
 ##### Initialization (optional):
 ```
     AsyncTaskManager.init()
@@ -45,18 +47,49 @@ dependencies {
 ```
 ##### Add back-ground task on pending task queue:
 ```
-    AsyncTaskManager.addTask(task: AsyncTask<T>)
+    // from AppCompatActivity/Fragment body
     
+    AsyncTaskManager.addTask(
+                task = {
+                    // ..........
+                    // ............
+                    // .............
+                    // return here
+                },
+                doOnSuccess = {
+                    println(it)
+                },
+                doOnFailure = {
+                    it?.printStackTrace()
+                },
+                lifecycleOwner = this
+            )
     //or
     
-    AsyncTaskManager.addTask(task:()->T?) //Without caller lifecycle-owner hook
+    // With kotlin extension from AppCompatActivity/Fragment body
+    
+    addAsyncTask { 
+        //Task details here
+     }
+     
+    // or
+    
+    //from any other class
+    AsyncTaskManager.addTask(task = {
+                //Task details here
+        })
+    
+    
 ```
 ##### Add/cancellation of back-ground task from AppCompatActivity/Fragment body with lifecycle-owner hook:
 ```
-    val task:AsyncTask<T> = addAsyncTask(task:()->T?) // Adding back-ground task
+    val handler: AsyncTaskHandler<Unit> = addAsyncTask { 
+        //..................
+        //..................
+     }
     .....
     .....
-    task.cancel() //Cancellation of back-ground task
+    handler.cancelTask() //Cancellation of back-ground task
 ```
 License
 --------
