@@ -16,13 +16,15 @@ import androidx.lifecycle.LifecycleOwner
  * @param doOnSuccess optional callback to be called on task success.
  * @param doOnFailure optional callback to be called on task failure.
  * @param lifecycleOwner optional(but recommended) Lifecycle hook for task cancellation.
+ * @param cancelOnPause flag to enable(enabled by default) task cancellation on life-cycle owner pause.
  * */
 
 internal class AsyncTask<T>(
     private val task:()->T?,
     private val doOnSuccess:((T?)->Unit)? = null,
     private val doOnFailure:((Throwable?)->Unit)?=null,
-    lifecycleOwner: LifecycleOwner?=null
+    lifecycleOwner: LifecycleOwner?=null,
+    private val cancelOnPause:Boolean = true
 ): DefaultLifecycleObserver {
 
     private var cancelled = OnceSettableBoolean()
@@ -32,7 +34,13 @@ internal class AsyncTask<T>(
     }
 
     override fun onDestroy(owner: LifecycleOwner) {
-        cancelled.set()
+        cancel()
+    }
+
+    override fun onPause(owner: LifecycleOwner) {
+        if (cancelOnPause){
+            cancel()
+        }
     }
 
     internal fun runTask():T?{
