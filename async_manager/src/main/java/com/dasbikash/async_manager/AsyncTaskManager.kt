@@ -1,7 +1,5 @@
 package com.dasbikash.async_manager
 
-import androidx.appcompat.app.AppCompatActivity
-import androidx.fragment.app.Fragment
 import androidx.lifecycle.LifecycleOwner
 import kotlinx.coroutines.*
 import java.util.*
